@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recent Transactions</title>
+    <style>
+        .transaction {
+            border: 1px solid #ccc;
+            margin: 10px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .transaction img {
+            max-width: 200px;
+            display: block;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Recent Transactions</h1>
+    <div id="prices"></div>
+    <div id="results"></div>
+
+    <script>
+        const slug = "e83d8eba-269e-4af8-889b-e26d4287fd52";
+        const apiUrl = 'https://tensor.p.rapidapi.com/graphql';
+        const apiKey = '377550b1d9msh16acacf91b5a1aap1a2e3cjsn42fe7cde549b';
+        
+        async function fetchPrices() {
+            const query = `
+                query Instrument($slug: String!) {
+                    instrumentTV2(slug: $slug) {
+                        statsV2 {
+                            floor24h
+                            sellNowPrice
+                        }
+                    }
+                }
+            `;
+            const options = {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Rapidapi-Key': apiKey,
+                    'X-Rapidapi-Host': 'tensor.p.rapidapi.com'
+                },
+                body: JSON.stringify({
+                    query,
+                    variables: { slug }
+                })
+            };
+
+            try {
+                const response = await fetch(apiUrl, options);
+                const result = await response.json();
+                console.log(result);
+
+                const floorPrice = result.data.instrumentTV2.statsV2.floor24h / 1000000000;
+                const sellNowPrice = result.data.instrumentTV2.statsV2.sellNowPrice / 1000000000;
+                
+                const formattedFloorPrice = floorPrice.toFixed(9).replace(/\.?0+$/, ''); // Format to up to 9 decimals, remove trailing zeros
+                const formattedSellNowPrice = sellNowPrice.toFixed(9).replace(/\.?0+$/, ''); // Format to up to 9 decimals, remove trailing zeros
+
+                const pricesDiv = document.getElementById('prices');
+                pricesDiv.innerHTML = `
+                    <div class="transaction">
+                        <h2>Floor Price of Collection: ${formattedFloorPrice} SOL</h2>
+                        <h2>Sell Now Price: ${formattedSellNowPrice} SOL</h2>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error fetching prices:', error);
+            }
+        }
+
+        async function fetchTransactions() {
+            const query = `
+                query RecentTransactions($slug: String!, $keepLatestListDelistOnly: Boolean!, $filters: TransactionsFilters, $cursor: TransactionsCursorInput, $limit: Int) {
+                    recentTransactions(
+                        slug: $slug
+                        keepLatestListDelistOnly: $keepLatestListDelistOnly
+                        filters: $filters
+                        cursor: $cursor
+                        limit: $limit
+                    ) {
+                        txs {
+                            ...ReducedLinkedTx
+                            __typename
+                        }
+                        page {
+                            endCursor {
+                                txAt
+                                txKey
+                                __typename
+                            }
+                            hasMore
+                            __typename
+                        }
+                        __typename
+                    }
+                }
+
+                fragment ReducedLinkedTx on LinkedTransactionTV2 {
+                    tx {
+                        ...ReducedParsedTx
+                        __typename
+                    }
+                    mint {
+                        ...ReducedMint
+                        __typename
+                    }
+                    __typename
+                }
+
+                fragment ReducedParsedTx on ParsedTransaction {
+                    source
+                    txKey
+                    txId
+                    txType
+                    grossAmount
+                    sellerId
+                    buyerId
+                    txAt
+                    blockNumber
+                    txMetadata {
+                        auctionHouse
+                        urlId
+                        sellerRef
+                        tokenAcc
+                        __typename
+                    }
+                    poolOnchainId
+                    __typename
+                }
+
+                fragment ReducedMint on TLinkedTxMintTV2 {
+                    onchainId
+                    compressed
+                    owner
+                    name
+                    imageUri
+                    animationUri
+                    metadataUri
+                    metadataFetchedAt
+                    sellRoyaltyFeeBPS
+                    tokenStandard
+                    tokenEdition
+                    attributes {
+                        trait_type
+                        value
+                        __typename
+                    }
+                    lastSale {
+                        price
+                        txAt
+                        __typename
+                    }
+                    accState
+                    hidden
+                    ...MintRarityFields
+                    staked {
+                        stakedAt
+                        activatedAt
+                        stakedByOwner
+                        __typename
+                    }
+                    inscription {
+                        ...InscriptionData
+                        __typename
+                    }
+                    __typename
+                }
+
+                fragment MintRarityFields on TLinkedTxMintTV2 {
+                    rarityRankHrtt
+                    rarityRankStat
+                    rarityRankTeam
+                    rarityRankTn
+                    __typename
+                }
+
+                fragment InscriptionData on InscriptionData {
+                    inscription
+                    inscriptionData
+                    immutable
+                    order
+                    spl20 {
+                        p
+                        tick
+                        amt
+                        __typename
+                    }
+                    __typename
+                }
+            `;
+            const options = {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Rapidapi-Key': apiKey,
+                    'X-Rapidapi-Host': 'tensor.p.rapidapi.com'
+                },
+                body: JSON.stringify({
+                    query,
+                    variables: {
+                        slug,
+                        limit: 50,
+                        keepLatestListDelistOnly: false,
+                        filters: {
+                            txTypes: ["ADJUST_PRICE", "AUCTION_SETTLE", "DELIST", "ELIXIR_COMPOSED_BUY_NFT", "ELIXIR_COMPOSED_SELL_NFT", "LIST", "SALE_ACCEPT_BID", "SALE_BUY_NOW", "SWAP_BUY_NFT", "SWAP_DEPOSIT_LIQ", "SWAP_DEPOSIT_NFT", "SWAP_SELL_NFT", "SWAP_WITHDRAW_LIQ", "SWAP_WITHDRAW_NFT"],
+                            mps: null,
+                            prices: null,
+                            traitCount: null,
+                            traits: null
+                        }
+                    }
+                })
+            };
+
+            try {
+                const response = await fetch(apiUrl, options);
+                const result = await response.json();
+                console.log(result);
+
+                const resultsDiv = document.getElementById('results');
+                resultsDiv.innerHTML = ''; // Clear previous results
+
+                result.data.recentTransactions.txs.forEach(transaction => {
+                    const mint = transaction.mint;
+                    const solPrice = mint.lastSale ? mint.lastSale.price / 1000000000 : 0;
+                    const formattedPrice = solPrice.toFixed(9).replace(/\.?0+$/, ''); // Format to up to 9 decimals, remove trailing zeros
+
+                    const div = document.createElement('div');
+                    div.className = 'transaction';
+                    div.innerHTML = `
+                        <h2>${mint.name}</h2>
+                        <img src="${mint.imageUri}" alt="${mint.name}">
+                        <p>Sell Price: ${formattedPrice} SOL</p>
+                    `;
+                    resultsDiv.appendChild(div);
+                });
+            } catch (error) {
+                console.error('Error fetching transactions:', error);
+            }
+        }
+
+        fetchTransactions();
+        fetchPrices();
+        setInterval(fetchPrices, 3000); // Update prices every 3 seconds
+    </script>
+</body>
+</html>
